@@ -1,0 +1,19 @@
+function [TCoefkappa, VCoefkappa] = f_bulk_kappa(r, R, Rd, Rdd, n, Ca, Re, alph, w, dr, rs, vs)
+%UNTITLED Summary of this function goes here
+%   Detailed explanation goes here
+
+[wkap] = f_kappa_kernel(r, dr, n, w);
+
+Ckap = -((2.*n.*(2+n).*r.^(-12-n).*(3.*(7+n).*r.^4.*R.^(5+2.*n).*Rd.^2.*rs.^7-...
+    3.*r.^7.*R.^(2+2.*n).*((3+2.*n).*Rd.^2+R.*Rdd).*rs.^7))./((1+n).*rs.^7))-...
+    (60.*n.*(2+n).*(3+n).*r.^(-7-n).*R.^2.*Rd.*R.^(1+2.*n))./((1+n).*Re)-...
+    1./(Ca.*(1+n).*rs.^7)*2.*n.*(2+n).*r.^(-12-n).*R.^(1+2.*n).*vs.*(r.^4.*rs.^2.*(5.*(3+...
+    n).*r.^6-(37+7.*n).*r.^3.*vs+3.*(7+n).*vs.^2)+alph.*(15.*(3+n).*r.^10.*(r-rs).*(r+rs)+r.^7.*((-177+...
+    n+4.*n.^2).*r.^2+3.*(37+7.*n).*rs.^2).*vs-r.^4.*(8.*(-36+n.*(3+n)).*r.^2+9.*(7+n).*rs.^2).*vs.^2+...
+    (-222+n.*(21+5.*n)).*r.^3.*vs.^3-(-6+n).*(11+n).*vs.^4));
+Ckapdot = (6*n*(2+n).*r.^(-5-n).*R^(3+2*n).*Rd)./(1+n);
+
+TCoefkappa = Ckap(:) * (wkap);
+VCoefkappa = Ckapdot(:) * wkap;
+
+end
