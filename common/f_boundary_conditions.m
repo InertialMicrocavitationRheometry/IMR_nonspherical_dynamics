@@ -1,8 +1,7 @@
 function [A, rhs] = f_boundary_conditions(A, ep, epd, R, Rd, Req, ...
                                   N, xN, Ca, alph, Re, w, rhs, r, dr, ...
                                   forcedep, mod, dxdr, rot, H1)
-%MODIFY_A_BOUNDARY_CONDITIONS Summary of this function goes here
-%   Detailed explanation goes here
+%F_BOUNDARY_CONDITIONS Apply modal boundary conditions to A and rhs.
 
 sr = R/Req;
 

@@ -1,6 +1,5 @@
 function [TCoefKJ, VCoefKJ] = f_bulk_KJ(r, rs, vs, dr, oneW, W, n, R, Rd, Rdd, Ca, Re, alph)
-%F_BULK_KJ Summary of this function goes here
-%   Detailed explanation goes here
+%F_BULK_KJ Build coefficient matrices for the J and K integral terms.
 
 [KmT, JmT] = f_J_K_kernel(r, dr, oneW, W, n);
 

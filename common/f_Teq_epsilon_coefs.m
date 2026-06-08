@@ -1,8 +1,6 @@
 function [epCoef, epdCoef] = f_Teq_epsilon_coefs(R, Rd, Rdd, r, n, Ca, alph, Re, ...
     rs, vs)
-%COMPUTE_SOURCE_TERMS This function is to compute the "source terms" -
-%treating the epsilon evolution as known and uncoupled, to first build the
-%solution for the evolution of the T field.
+%F_TEQ_EPSILON_COEFS Coefficients multiplying epsilon and epsilon-dot in T rows.
 
 r = r.'; rs = rs.';
 

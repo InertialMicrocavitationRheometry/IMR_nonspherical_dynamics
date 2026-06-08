@@ -26,6 +26,7 @@ rotational perturbation models, and exports a strain-field snapshot PDF.
 ```text
 IMR_nonspherical_dynamics/
 |-- s_basic_simulation.m              Main runnable MATLAB driver
+|-- setup_paths.m                     Adds repository folders to the MATLAB path
 |-- examples/                         Ready-to-run parameter permutations
 |-- common/                           Shared MATLAB functions and MEX support
 |   |-- compute_rotational_perturbation_evolution.m
@@ -35,6 +36,8 @@ IMR_nonspherical_dynamics/
 |   |-- mexhyp2f1.mexw64              Windows MEX binary
 |   |-- mexhyp2f1.mexa64              Linux MEX binary
 |   `-- make_hyp2f1/                  Sources and build script for mexhyp2f1
+|-- CITATION.cff
+|-- THIRD_PARTY_NOTICES.md
 |-- LICENSE
 `-- README.md
 ```
@@ -47,7 +50,11 @@ may contain local experimental or simulation outputs used by related workflows.
 
 - MATLAB, preferably a recent release.
 - A MATLAB-supported C compiler if `mexhyp2f1` must be rebuilt.
-- The external IMR radial solver repository available as a sibling directory:
+- The external IMR radial solver repository for `s_basic_simulation.m`, `lic`
+  examples, and `ultrasound` examples. The `free` examples and smoke test do not
+  require IMRv2.
+
+The default IMRv2 layout is:
 
 ```text
 ../IMRv2/src/forward_solver/
@@ -59,11 +66,23 @@ The included `mexhyp2f1.mexw64` and `mexhyp2f1.mexa64` files support Windows and
 Linux. On another platform, or after a MATLAB/MEX compatibility change, rebuild
 the MEX file from `common/make_hyp2f1/`.
 
+## Quick Start
+
+From the repository root in MATLAB:
+
+```matlab
+setup_paths
+run('examples/run_smoke_test.m')
+```
+
+The smoke test runs a reduced free-bubble viscoelastic single-mode example. It
+does not call IMRv2, open figures, or write snapshot files.
+
 ## IMRv2 Compatibility
 
 This repository does not include the IMRv2 radial bubble solver. Instead,
-`common/f_call_IMRv2.m` is a wrapper that adds the IMRv2 forward-solver folder to
-the MATLAB path and calls `f_imr_fd`.
+`common/f_call_IMRv2.m` is a wrapper that locates the IMRv2 forward-solver folder
+and calls `f_imr_fd`.
 
 The default expected folder layout is:
 
@@ -76,29 +95,29 @@ Code/
             `-- f_imr_fd.m
 ```
 
-When MATLAB is run from the `IMR_nonspherical_dynamics` root,
-`common/f_call_IMRv2.m` uses:
+When MATLAB is run from the `IMR_nonspherical_dynamics` root, the default
+sibling-folder lookup is:
 
 ```matlab
-addpath ../IMRv2/src/forward_solver/
+../IMRv2/src/forward_solver/
 ```
 
-If IMRv2 is stored somewhere else, either add the correct IMRv2 forward-solver
-folder before running:
+If IMRv2 is stored somewhere else, pass the forward-solver folder to
+`setup_paths` before running an IMRv2-backed example:
 
 ```matlab
-addpath('C:\path\to\IMRv2\src\forward_solver')
+setup_paths('IMRv2Path', 'C:\path\to\IMRv2\src\forward_solver')
 ```
 
-or update the `addpath` line in `common/f_call_IMRv2.m`.
+Alternatively, add the folder to the MATLAB path yourself or set the
+`IMRV2_FORWARD_SOLVER` environment variable before starting MATLAB.
 
 To check compatibility from MATLAB:
 
 ```matlab
 cd path/to/IMR_nonspherical_dynamics
-addpath common
+setup_paths
 which f_call_IMRv2
-addpath ../IMRv2/src/forward_solver
 which f_imr_fd
 ```
 
@@ -133,7 +152,7 @@ IMRv2 is not required for:
 From the repository root in MATLAB:
 
 ```matlab
-addpath common
+setup_paths
 s_basic_simulation
 ```
 
@@ -160,6 +179,7 @@ multimode perturbation example.
 For example:
 
 ```matlab
+setup_paths
 run('examples/run_lic_viscoelastic_single_mode.m')
 ```
 
@@ -185,7 +205,7 @@ The `hyp2f1` MEX support in `common/` is from Siyi Deng's MATLAB Central File
 Exchange submission, "Gauss hypergeometric function." That package computes the
 real-valued Gauss hypergeometric function using SciPy/Cephes C-source routines
 and provides the `make_hyp2f1.m` build script used here. See
-[Citations](#citations).
+[Citations](#citations) and `THIRD_PARTY_NOTICES.md`.
 
 ## Main Files
 
@@ -202,7 +222,8 @@ and provides the `make_hyp2f1.m` build script used here. See
 
 ## Citations
 
-For now, cite the nonspherical code using:
+GitHub should display citation metadata from `CITATION.cff`. For now, cite the
+nonspherical code using:
 
 ```text
 IMR Nonspherical Dynamics. See:
@@ -224,9 +245,11 @@ The MATLAB Central page notes that the package computes real-valued
 `2F1(a,b;c;z)` using SciPy C-source files and provides `make_hyp2f1.m` to
 compile the MEX files.
 
+Additional third-party source notes are listed in `THIRD_PARTY_NOTICES.md`.
+
 ## Notes
 
-- Run from the repository root unless you also update the relative paths in the
+- Run `setup_paths` from the repository root before using the examples or driver
   scripts.
 - Generated figures, PDFs, movies, and large `.mat` datasets should usually stay
   out of version control.

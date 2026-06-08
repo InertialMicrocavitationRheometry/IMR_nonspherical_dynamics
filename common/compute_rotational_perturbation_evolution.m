@@ -1,10 +1,15 @@
 function [ep_tot, epd_tot, T_tot, Td_tot, R, Rd, t] = compute_rotational_perturbation_evolution(xN, L, N, ep0, epd0, T0, ...
-                    Td0, Req, R, Rd, Rdd, Ca, alph, Re, We, t, TSM, forcedep, mod, rot)
-%COMPUTE_ROTATIONAL_PERTURBATION_EVOLUTION  is the main function call whcih
-%computes the evolution of the surface perturbations of a bubble within a
-%viscoelastic material
+                    Td0, Req, R, Rd, Rdd, Ca, alph, Re, We, t, TSM, forcedep, mod, rot, varargin)
+%COMPUTE_ROTATIONAL_PERTURBATION_EVOLUTION Compute surface perturbation evolution.
+%   Use 'Verbose', true to print per-percent condition-number diagnostics.
 
-addpath common/
+addpath(fileparts(mfilename('fullpath')));
+
+parser = inputParser;
+parser.FunctionName = 'compute_rotational_perturbation_evolution';
+addParameter(parser, 'Verbose', false, @(v) islogical(v) && isscalar(v));
+parse(parser, varargin{:});
+verbose = parser.Results.Verbose;
 
 % xN: number of grid points
 % N: a vector containing mode numbers to be simulated
@@ -18,8 +23,8 @@ addpath common/
 % Td_tot: 3D array,  length(N) x xN x length(t), contains Td field for all
 % modes for all timesteps
 
-% ep_tot: length(N) x length(t) all perturbastion evolution data
-% epd_tot: length(N) x length(t) all time derivative perturbastion evolution data
+% ep_tot: length(N) x length(t) all perturbation evolution data
+% epd_tot: length(N) x length(t) all time derivative perturbation evolution data
 nmode = length(N);
 tsteps = length(t);
 
@@ -50,7 +55,6 @@ if forcedep == 'T'
     for i = 1:nmode
         ep_tot(i,:) = ep0(i)*sin(f.*t);
         epd_tot(i,:) = f.*ep0(i)*cos(f.*t);
-        epdd_tot(i,:) = -f.^2.*ep0(i)*sin(f.*t);
     end
     P = 2;                 % period in NONDIM time (since t has been scaled by tc)
 end
@@ -58,8 +62,6 @@ end
 if (isempty(R) && isempty(Rd))
     % Manufacture solution for R and Rd for now
     a = 0.05;
-    b = 10;
-    c = -2.5;
     f = 2*pi/4;
 
     R = 1 + a*cos(f.*t);
@@ -103,7 +105,7 @@ eqTol = 1e-3;               % relative tolerance for period-averaged T change
 nConsec = 4;                % require this many consecutive "small change" detections
 eqHits = 0;                 % counter
 
-% Precompute difference stencils and integration matricies (xN x xN)
+% Precompute difference stencils and integration matrices (xN x xN)
 h = x_g(2)-x_g(1);
 H1 = f_difference_stencil(xN, 1, h);
 H2 = f_difference_stencil(xN, 2, h);
@@ -339,20 +341,21 @@ for i = 1:tsteps-1
     q_nm1 = q;
     q = q_pp1;
 
-% --- progress output every 1% ---
-pctDone = floor(100 * i / Nt);
-if pctDone >= nextPct
-    cdeest = condest(Alhs);
-    rdo    = rcond(full(Alhs));
+    if verbose
+        pctDone = floor(100 * i / Nt);
+        if pctDone >= nextPct
+            cdeest = condest(Alhs);
+            rdo = rcond(full(Alhs));
 
-    fprintf('%3d%% complete | condest(Alhs) = %.3e | rcond(Alhs) = %.3e\n', ...
-           pctDone, cdeest, rdo);
+            fprintf('%3d%% complete | condest(Alhs) = %.3e | rcond(Alhs) = %.3e\n', ...
+                pctDone, cdeest, rdo);
 
-    nextPct = pctDone + 1;
-end
+            nextPct = pctDone + 1;
+        end
+    end
 
     if forcedep == 'T'
-        [isEquil, eqHits, relChangeMax, pinc] = check_quasi_equil(r, ...
+        [isEquil, eqHits, ~, pinc] = check_quasi_equil(r, ...
             t(i+1), t, P, T_tot, Td_tot, nmode, xN, ...
             eqTol, nConsec, eqHits, i+1);
 

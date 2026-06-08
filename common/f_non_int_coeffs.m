@@ -1,6 +1,5 @@
 function [Ct1, Ct2, Ct3, Ct4, Ct5, Ct6, Ct7] = f_non_int_coeffs(r, R, Rd, Rdd, n, Ca, Re, alph, rs, vs)
-%F_NON_INT_COEFFS Summary of this function goes here
-%   Detailed explanation goes here
+%F_NON_INT_COEFFS Compute local coefficients in the rotational T equation.
 
 Ct1 = -((R.^2.*Rd)./(r.^2.*Re));
 

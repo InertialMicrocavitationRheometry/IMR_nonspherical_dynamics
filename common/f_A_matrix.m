@@ -1,8 +1,7 @@
 function A = f_A_matrix(r, R, Rd, Rdd, Req, N, xN, H1, H2, H3, w, Re, ...
                 Ca, We, alph,  a, dxdr, dxdr2, dxdr21, dxdr3, dxdr32, ... 
                 dxdr31, dr, oneW, W, rs, vs, sr, forcedep, blockSize, mod, rot)
-%F_A_MATRIX Summary of this function goes here
-%   Detailed explanation goes here
+%F_A_MATRIX Assemble the linear operator for the coupled modal evolution.
 
 
 I = eye(xN);

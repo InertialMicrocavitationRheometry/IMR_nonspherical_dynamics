@@ -1,12 +1,10 @@
 function s = f_source_terms(ep, epd, R, Rd, Rdd, r, N, xN, Ca, alph, Re, At1, ...
     rs, vs, blockSize)
-%COMPUTE_SOURCE_TERMS This function is to compute the "source terms" -
-%treating the epsilon evolution as known and uncoupled, to first build the
-%solution for the evolution of the T field.
+%F_SOURCE_TERMS Build the T-field source vector for prescribed epsilon history.
 
 % s: vector of length length(N)*2*xN for the source terms
 % r: physical coordinate space
-% Ap: Source terms to the vorticity equation from the accleration of the
+% Ap: Source terms to the vorticity equation from the acceleration of the
 % potential model
 % Sp: Source terms to the vorticity equation from the stress of the
 % potential model

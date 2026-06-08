@@ -16,7 +16,7 @@ repoRoot = fileparts(exampleDir);
 addpath(fullfile(repoRoot, 'common'));
 
 startDir = pwd;
-cleanupObj = onCleanup(@() cd(startDir)); %#ok<NASGU>
+cleanupObj = onCleanup(@() cd(startDir));
 cd(repoRoot);
 
 cfg = normalize_example_config(cfg, exampleDir);
@@ -62,11 +62,13 @@ Td0 = T0;
 
 [epirr, ~, ~, ~, ~, ~, ~] = compute_rotational_perturbation_evolution( ...
     cfg.xN, cfg.L, N, ep0, epd0, T0, Td0, 1, R, Rd, Rdd, ...
-    Ca, cfg.alph, Re, We, t, cfg.timeSteppingMethod, cfg.forcedep, cfg.model, "irr");
+    Ca, cfg.alph, Re, We, t, cfg.timeSteppingMethod, cfg.forcedep, cfg.model, "irr", ...
+    'Verbose', cfg.verbose);
 
 [ep, epd, T, Td, R, Rd, t] = compute_rotational_perturbation_evolution( ...
     cfg.xN, cfg.L, N, ep0, epd0, T0, Td0, 1, R, Rd, Rdd, ...
-    Ca, cfg.alph, Re, We, t, cfg.timeSteppingMethod, cfg.forcedep, cfg.model, "rot");
+    Ca, cfg.alph, Re, We, t, cfg.timeSteppingMethod, cfg.forcedep, cfg.model, "rot", ...
+    'Verbose', cfg.verbose);
 
 if cfg.makePlots
     plot_example_histories(cfg, N, t, R, ep, epirr, Lmax);
@@ -120,6 +122,9 @@ if ~isfield(cfg, 'makePlots')
 end
 if ~isfield(cfg, 'makeSnapshot')
     cfg.makeSnapshot = true;
+end
+if ~isfield(cfg, 'verbose')
+    cfg.verbose = false;
 end
 if ~isfield(cfg, 'outputDir') || strlength(string(cfg.outputDir)) == 0
     cfg.outputDir = fullfile(exampleDir, 'output');

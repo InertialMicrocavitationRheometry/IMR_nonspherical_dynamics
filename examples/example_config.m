@@ -39,6 +39,7 @@ cfg.timeSteppingMethod = 2;
 % Plot/output settings.
 cfg.makePlots = true;
 cfg.makeSnapshot = true;
+cfg.verbose = false;
 cfg.outputDir = "";
 cfg.outputFile = "";
 cfg.snapshotLayout = [3 4];

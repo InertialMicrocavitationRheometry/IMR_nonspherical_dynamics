@@ -1,7 +1,6 @@
 function [A] = f_ep_source_terms(r, xN, N, A, R, Rd, Rdd, Req, H1, dxdr, dr, w, ...
                         W, One_wT, Re, Ca, alph, vs, rs, sr, mod, forcedep, rot)
-%F_EP_SOURCE_TERMS Summary of this function goes here
-%   Detailed explanation goes here
+%F_EP_SOURCE_TERMS Add T-field source terms to the epsilon evolution rows.
 
 nmodes = length(N);
 I = eye(xN);

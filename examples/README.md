@@ -17,6 +17,7 @@ calls `run_nonspherical_example`. The scripts are not run automatically.
 From MATLAB:
 
 ```matlab
+setup_paths
 run('examples/run_lic_viscoelastic_single_mode.m')
 ```
 
@@ -28,6 +29,12 @@ run_lic_viscoelastic_single_mode
 
 Generated figures and snapshot PDFs are written to `examples/output/` by
 default.
+
+For a quick check that does not require IMRv2, figures, or file output:
+
+```matlab
+run('examples/run_smoke_test.m')
+```
 
 ## Drive Types
 
@@ -48,4 +55,3 @@ The material presets are intentionally simple starting points:
 
 Tune the parameters in each script or in `example_config.m` for publication
 quality studies.
-

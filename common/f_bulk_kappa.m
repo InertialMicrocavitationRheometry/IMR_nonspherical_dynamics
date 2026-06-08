@@ -1,6 +1,5 @@
 function [TCoefkappa, VCoefkappa] = f_bulk_kappa(r, R, Rd, Rdd, n, Ca, Re, alph, w, dr, rs, vs)
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+%F_BULK_KAPPA Build coefficient matrices for the kappa integral term.
 
 [wkap] = f_kappa_kernel(r, dr, n, w);
 

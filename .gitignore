@@ -57,6 +57,8 @@ compile_commands.json
 *.log
 *.bak
 *.swp
+*.asv
+*~
 
 # vcpkg
 vcpkg_installed/
@@ -67,5 +69,15 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+strain_test.pdf
+common/strain_test.pdf
+examples/output/*
+!examples/output/.gitignore
+
+# Generated movies
+*.avi
+*.mp4
+*.gif
+
 data/
 data.zip
