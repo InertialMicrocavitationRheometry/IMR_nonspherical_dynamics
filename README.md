@@ -26,6 +26,7 @@ rotational perturbation models, and exports a strain-field snapshot PDF.
 ```text
 IMR_nonspherical_dynamics/
 |-- s_basic_simulation.m              Main runnable MATLAB driver
+|-- examples/                         Ready-to-run parameter permutations
 |-- common/                           Shared MATLAB functions and MEX support
 |   |-- compute_rotational_perturbation_evolution.m
 |   |-- f_*.m                         Numerical kernels and model terms
@@ -54,12 +55,80 @@ may contain local experimental or simulation outputs used by related workflows.
 ../IMRv2/src/forward_solver/
 ```
 
-`common/f_call_IMRv2.m` adds that path and calls `f_imr_fd`. Run MATLAB from the
-root of this repository so that relative path resolves correctly.
+See [IMRv2 Compatibility](#imrv2-compatibility) for setup details.
 
 The included `mexhyp2f1.mexw64` and `mexhyp2f1.mexa64` files support Windows and
 Linux. On another platform, or after a MATLAB/MEX compatibility change, rebuild
 the MEX file from `common/make_hyp2f1/`.
+
+## IMRv2 Compatibility
+
+This repository does not include the IMRv2 radial bubble solver. Instead,
+`common/f_call_IMRv2.m` is a wrapper that adds the IMRv2 forward-solver folder to
+the MATLAB path and calls `f_imr_fd`.
+
+The default expected folder layout is:
+
+```text
+Code/
+|-- IMR_nonspherical_dynamics/
+`-- IMRv2/
+    `-- src/
+        `-- forward_solver/
+            `-- f_imr_fd.m
+```
+
+When MATLAB is run from the `IMR_nonspherical_dynamics` root,
+`common/f_call_IMRv2.m` uses:
+
+```matlab
+addpath ../IMRv2/src/forward_solver/
+```
+
+If IMRv2 is stored somewhere else, either add the correct IMRv2 forward-solver
+folder before running:
+
+```matlab
+addpath('C:\path\to\IMRv2\src\forward_solver')
+```
+
+or update the `addpath` line in `common/f_call_IMRv2.m`.
+
+To check compatibility from MATLAB:
+
+```matlab
+cd path/to/IMR_nonspherical_dynamics
+addpath common
+which f_call_IMRv2
+addpath ../IMRv2/src/forward_solver
+which f_imr_fd
+```
+
+`which f_imr_fd` should return the IMRv2 solver path. If it returns
+`f_imr_fd not found`, the radial solver path is not configured.
+
+The wrapper currently assumes the IMRv2 `f_imr_fd` interface accepts name-value
+inputs such as `radial`, `bubtherm`, `tvector`, `vapor`, `medtherm`,
+`masstrans`, `method`, `stress`, `collapse`, `mu`, `g`, `alphax`, `surft`,
+`r0`, `req`, `kappa`, `t8`, `rho8`, `pa`, `omega`, and `wave_type`, and returns
+radial displacement, velocity, and acceleration in the positions used here:
+
+```matlab
+[t, R, Rd, ~, ~, ~, ~, Rdd] = f_imr_fd(...);
+```
+
+If a newer IMRv2 version changes option names, output order, or units, update
+`common/f_call_IMRv2.m` before running LIC or ultrasound examples.
+
+IMRv2 is required for:
+
+- `s_basic_simulation.m`
+- `examples/run_lic_*.m`
+- `examples/run_ultrasound_*.m`
+
+IMRv2 is not required for:
+
+- `examples/run_free_*.m`, which use a prescribed constant-radius radial history.
 
 ## Running the Basic Simulation
 
@@ -82,6 +151,23 @@ The script:
 
 The default driver uses mode `n = 8`, `xN = 256` radial grid points, and
 `tsteps = 5000`.
+
+## Example Permutations
+
+The `examples/` folder contains scripts for free, laser-induced cavitation
+(`lic`), and ultrasound-forced radial histories across viscous, elastic, and
+viscoelastic material presets. Each case is available as both a single-mode and
+multimode perturbation example.
+
+For example:
+
+```matlab
+run('examples/run_lic_viscoelastic_single_mode.m')
+```
+
+The examples share `examples/run_nonspherical_example.m` and
+`examples/example_config.m`, so changes to the common workflow can be made in
+one place.
 
 ## Rebuilding `mexhyp2f1`
 
@@ -108,6 +194,7 @@ if no compiler has been configured.
 - `common/make_axisym_displacement_movie_all_fields.m`: snapshot/movie
   visualization for strain, strain rate, and stress fields.
 - `common/hyp2f1.m`: MATLAB wrapper for the compiled hypergeometric MEX routine.
+- `examples/`: simulation permutations built from the main driver workflow.
 
 ## Notes
 
@@ -116,4 +203,3 @@ if no compiler has been configured.
 - Generated figures, PDFs, movies, and large `.mat` datasets should usually stay
   out of version control.
 - `LICENSE` currently specifies the GNU General Public License v3.0.
-
