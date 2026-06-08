@@ -175,14 +175,6 @@ A project-specific citation should be added here once the nonspherical bubble dy
 
 ---
 
-## License
-
-`IMR_nonspherical_dynamics` is released under the GNU General Public License v3.0 unless otherwise specified in the repository.
-
-See `LICENSE` for details.
-
----
-
 ## Acknowledgments
 
 This work builds on the broader Inertial Microcavitation Rheometry framework developed by researchers at Brown University, the University of Michigan, the University of Wisconsin-Madison, Georgia Tech, and collaborators.
