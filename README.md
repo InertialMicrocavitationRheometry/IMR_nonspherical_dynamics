@@ -181,6 +181,12 @@ cd ../..
 This requires a working MEX compiler configuration. In MATLAB, use `mex -setup`
 if no compiler has been configured.
 
+The `hyp2f1` MEX support in `common/` is from Siyi Deng's MATLAB Central File
+Exchange submission, "Gauss hypergeometric function." That package computes the
+real-valued Gauss hypergeometric function using SciPy/Cephes C-source routines
+and provides the `make_hyp2f1.m` build script used here. See
+[Citations](#citations).
+
 ## Main Files
 
 - `s_basic_simulation.m`: top-level example/driver.
@@ -193,6 +199,30 @@ if no compiler has been configured.
   visualization for strain, strain rate, and stress fields.
 - `common/hyp2f1.m`: MATLAB wrapper for the compiled hypergeometric MEX routine.
 - `examples/`: simulation permutations built from the main driver workflow.
+
+## Citations
+
+For now, cite the nonspherical code using:
+
+```text
+IMR Nonspherical Dynamics. See:
+https://www.sciencedirect.com/science/article/pii/S2352431626000404
+```
+
+A project-specific nonspherical-code paper should replace or supplement this
+entry once it is available.
+
+The included `hyp2f1`/`mexhyp2f1` support is based on:
+
+```text
+Siyi Deng. Gauss hypergeometric function. MATLAB Central File Exchange,
+Version 1.0.0.0, published 11 Oct 2013.
+https://www.mathworks.com/matlabcentral/fileexchange/43865-gauss-hypergeometric-function
+```
+
+The MATLAB Central page notes that the package computes real-valued
+`2F1(a,b;c;z)` using SciPy C-source files and provides `make_hyp2f1.m` to
+compile the MEX files.
 
 ## Notes
 
