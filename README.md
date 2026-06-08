@@ -35,8 +35,6 @@ IMR_nonspherical_dynamics/
 |   |-- mexhyp2f1.mexw64              Windows MEX binary
 |   |-- mexhyp2f1.mexa64              Linux MEX binary
 |   `-- make_hyp2f1/                  Sources and build script for mexhyp2f1
-|-- data/                             Local datasets and generated data
-|-- data.zip                          Optional local data archive
 |-- LICENSE
 `-- README.md
 ```
