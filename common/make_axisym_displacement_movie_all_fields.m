@@ -13,9 +13,11 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
 %   The displayed wall is the perturbed interface r_b(theta,phi), but the
 %   solved radial fields live outside the mean spherical wall r=R(t).  The
 %   default WallFieldEvaluationMode='mean_wall_extension' evaluates the
-%   continuum field at max(r_b,R(t)) for rows with r<R(t), and
-%   MaskBelowMeanWall=true keeps those plotting-only rows hidden.  This
-%   avoids showing field values in the unsolved mean-wall interior.
+%   continuum field at max(r,R(t)) for rows with r<R(t), while the colour
+%   surface is still drawn down to the displayed perturbed wall.  This gives
+%   a continuous-looking wall plot without evaluating the field in the
+%   unsolved mean-wall interior.  Set MaskBelowMeanWall=true to hide those
+%   plotting-only rows.
 %
 % This version deliberately separates two operations that were mixed in the
 % older plotting functions:
@@ -68,7 +70,7 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
 %
 % Default near-wall behavior fixes artificial field values for r < R(t):
 %   'WallFieldEvaluationMode','mean_wall_extension'
-% The raw/legacy behavior can be requested with:
+% The raw/legacy below-mean-wall field evaluation can be requested with:
 %   'WallFieldEvaluationMode','perturbed_wall','MaskBelowMeanWall',false
 
 % The optional grid drawn by this function is an Eulerian/current polar grid
@@ -191,7 +193,7 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
     p.addParameter('RadialInterp', 'pchip');      % 'linear','pchip','makima'
     p.addParameter('ClampQueryBelowMeanWall', true);    % radial helper clamp; WallFieldEvaluationMode usually prevents below-wall queries
     p.addParameter('WallFieldEvaluationMode', 'mean_wall_extension'); % 'mean_wall_extension' evaluates field at max(r,R(t)); 'perturbed_wall' is legacy/raw
-    p.addParameter('MaskBelowMeanWall', true);          % hide color mesh where the display radius is below the solved mean wall
+    p.addParameter('MaskBelowMeanWall', false);         % optionally hide color mesh where the display radius is below the solved mean wall
     p.addParameter('FillMissingColorData', true);
     p.addParameter('ClampColorDataToCLim', true);
     p.addParameter('ContourLevels', 96);
@@ -829,9 +831,9 @@ function [X, Z, C] = current_almansi_colour_surface(fd, epNow, Rcur, Rref, N, rO
     s = s .^ opt.RadialSpacingPower;
 
     % Rplot is the radius used to draw the coloured surface.  By default the
-    % rows below the solved mean wall are masked after evaluating the field.
-    % Set MaskBelowMeanWall=false to let the colour geometry reach inward
-    % dimples of the displayed perturbed interface.
+    % colour geometry reaches inward dimples of the displayed perturbed
+    % interface.  Set MaskBelowMeanWall=true to hide rows that are below the
+    % solved mean wall.
     Rplot = rb + (rOuterDisplay - rb) .* s;
 
     % Rquery is the radius at which the theory is evaluated.  The governing
@@ -840,7 +842,8 @@ function [X, Z, C] = current_almansi_colour_surface(fd, epNow, Rcur, Rref, N, rO
     % dimples, rb < R(t), evaluating the continuum formulas at Rplot < R(t)
     % is outside the solved/linearized domain and can create artificial huge
     % near-wall values.  The default is therefore a constant normal extension
-    % of the mean-wall value into the small plotting-only gap rb <= r < R(t).
+    % of the mean-wall value into the small plotting-only gap rb <= r < R(t),
+    % while still drawing that gap so the colour reaches the actual wall.
     Rquery = Rplot;
     switch lower(strrep(char(opt.WallFieldEvaluationMode), '-', '_'))
         case {'mean_wall_extension','meanwall','mean_wall','clamp_to_mean_wall'}
@@ -2099,11 +2102,11 @@ function vq = interp_radial_current(rEval, vals, rq, method, opt)
     % The solver grid starts at the mean spherical wall r=R(t), while the
     % displayed wall is the perturbed surface r=R(t)*(1+eps*Y).  Therefore
     % parts of the displayed exterior can lie slightly below the first solver
-    % node.  Clamping those queries to r=R(t) creates angularly discontinuous
-    % near-wall bands.  By default we use a first-order linear extension below
-    % the first solver node, which is the plotting analogue of evaluating the
-    % first-order field at the perturbed wall.  Set
-    % 'ClampQueryBelowMeanWall',true to recover the old behavior.
+    % node.  The main colour path normally avoids those queries by using
+    % WallFieldEvaluationMode='mean_wall_extension'.  If raw perturbed-wall
+    % evaluation is requested, ClampQueryBelowMeanWall=true keeps interpolation
+    % at the first solver node; setting it false uses a first-order linear
+    % extension below the first solver node.
     rv = rEval(:);
     vv = vals(:);
     rq0 = real(rq);
