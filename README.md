@@ -1,0 +1,319 @@
+# IMR Nonspherical Dynamics
+
+MATLAB code for simulating small-amplitude nonspherical perturbations of an
+inertial microcavitation bubble in a soft material.
+
+The current repository is organized around one runnable driver script,
+`s_basic_simulation.m`, and a set of shared solver, numerical, and visualization
+functions in `common/`. The driver computes a radial bubble history, evolves a
+nonspherical spherical-harmonic perturbation, compares irrotational and
+rotational perturbation models, and exports a strain-field snapshot PDF.
+
+## Current Capabilities
+
+- Radial bubble history through an external IMR radial solver interface.
+- Nonspherical perturbation evolution for selected spherical harmonic modes.
+- Rotational and irrotational perturbation model comparison.
+- Finite-difference and trapezoidal-integration utilities for the transformed
+  radial domain.
+- Eulerian/current-domain visualization of strain, strain rate, and stress
+  fields with `make_axisym_displacement_movie_all_fields`.
+- Hypergeometric-function support through the included `mexhyp2f1` MEX binary
+  and rebuild sources.
+
+## Repository Layout
+
+```text
+IMR_nonspherical_dynamics/
+|-- s_basic_simulation.m              Main runnable MATLAB driver
+|-- setup_paths.m                     Adds repository folders to the MATLAB path
+|-- examples/                         Ready-to-run parameter permutations
+|-- common/                           Shared MATLAB functions and MEX support
+|   |-- compute_rotational_perturbation_evolution.m
+|   |-- f_*.m                         Numerical kernels and model terms
+|   |-- make_axisym_displacement_movie_all_fields.m
+|   |-- hyp2f1.m
+|   |-- mexhyp2f1.mexw64              Windows MEX binary
+|   |-- mexhyp2f1.mexa64              Linux MEX binary
+|   `-- make_hyp2f1/                  Sources and build script for mexhyp2f1
+|-- CITATION.cff
+|-- THIRD_PARTY_NOTICES.md
+|-- LICENSE
+`-- README.md
+```
+
+The `data/` directory and `data.zip` are ignored by git. The current
+`s_basic_simulation.m` script does not load files from `data/`, but the directory
+may contain local experimental or simulation outputs used by related workflows.
+
+## Requirements
+
+- MATLAB, preferably a recent release.
+- A MATLAB-supported C compiler if `mexhyp2f1` must be rebuilt.
+- The external IMR radial solver repository for `s_basic_simulation.m`, `lic`
+  examples, and `ultrasound` examples. The `free` examples and smoke test do not
+  require IMRv2.
+
+The default IMRv2 layout is:
+
+```text
+../IMRv2/src/forward_solver/
+```
+
+See [IMRv2 Compatibility](#imrv2-compatibility) for setup details.
+
+The included `mexhyp2f1.mexw64` and `mexhyp2f1.mexa64` files support Windows and
+Linux. On another platform, or after a MATLAB/MEX compatibility change, rebuild
+the MEX file from `common/make_hyp2f1/`.
+
+## Quick Start
+
+From the repository root in MATLAB:
+
+```matlab
+setup_paths
+run('examples/run_smoke_test.m')
+```
+
+The smoke test runs a reduced free-bubble viscoelastic single-mode example. It
+does not call IMRv2, open figures, or write snapshot files.
+
+## IMRv2 Compatibility
+
+This repository does not include the IMRv2 radial bubble solver. Instead,
+`common/f_call_IMRv2.m` is a wrapper that locates the IMRv2 forward-solver folder
+and calls `f_imr_fd`.
+
+The default expected folder layout is:
+
+```text
+Code/
+|-- IMR_nonspherical_dynamics/
+`-- IMRv2/
+    `-- src/
+        `-- forward_solver/
+            `-- f_imr_fd.m
+```
+
+When MATLAB is run from the `IMR_nonspherical_dynamics` root, the default
+sibling-folder lookup is:
+
+```matlab
+../IMRv2/src/forward_solver/
+```
+
+If IMRv2 is stored somewhere else, pass the forward-solver folder to
+`setup_paths` before running an IMRv2-backed example:
+
+```matlab
+setup_paths('IMRv2Path', 'C:\path\to\IMRv2\src\forward_solver')
+```
+
+Alternatively, add the folder to the MATLAB path yourself or set the
+`IMRV2_FORWARD_SOLVER` environment variable before starting MATLAB.
+
+To check compatibility from MATLAB:
+
+```matlab
+cd path/to/IMR_nonspherical_dynamics
+setup_paths
+which f_call_IMRv2
+which f_imr_fd
+```
+
+`which f_imr_fd` should return the IMRv2 solver path. If it returns
+`f_imr_fd not found`, the radial solver path is not configured.
+
+The wrapper currently assumes the IMRv2 `f_imr_fd` interface accepts name-value
+inputs such as `radial`, `bubtherm`, `tvector`, `vapor`, `medtherm`,
+`masstrans`, `method`, `stress`, `collapse`, `mu`, `g`, `alphax`, `surft`,
+`r0`, `req`, `kappa`, `t8`, `rho8`, `pa`, `omega`, and `wave_type`, and returns
+radial displacement, velocity, and acceleration in the positions used here:
+
+```matlab
+[t, R, Rd, ~, ~, ~, ~, Rdd] = f_imr_fd(...);
+```
+
+If a newer IMRv2 version changes option names, output order, or units, update
+`common/f_call_IMRv2.m` before running LIC or ultrasound examples.
+
+IMRv2 is required for:
+
+- `s_basic_simulation.m`
+- `examples/run_lic_*.m`
+- `examples/run_ultrasound_*.m`
+
+IMRv2 is not required for:
+
+- `examples/run_free_*.m`, which use a prescribed constant-radius radial history.
+
+## Running the Basic Simulation
+
+From the repository root in MATLAB:
+
+```matlab
+setup_paths
+s_basic_simulation
+```
+
+The script:
+
+1. Defines radial, material, and perturbation parameters.
+2. Calls `f_call_IMRv2` to compute the spherical radial trajectory.
+3. Calls `compute_rotational_perturbation_evolution` for irrotational and
+   rotational perturbation evolution.
+4. Plots the radius and perturbation amplitude histories.
+5. Writes a snapshot PDF named `strain_test.pdf` in the current working
+   directory.
+
+The default driver uses mode `n = 8`, `xN = 256` radial grid points, and
+`tsteps = 5000`.
+
+## Perturbation Solver Inputs
+
+The main nonspherical solver is
+`common/compute_rotational_perturbation_evolution.m`:
+
+```matlab
+[ep_tot, epd_tot, T_tot, Td_tot, R, Rd, t] = ...
+    compute_rotational_perturbation_evolution(xN, L, N, ep0, epd0, ...
+    T0, Td0, Req, R, Rd, Rdd, Ca, alph, Re, We, t, TSM, ...
+    forcedep, mod, rot, Name, Value)
+```
+
+All positional inputs are required:
+
+| Input | Meaning |
+| --- | --- |
+| `xN` | Number of finite-difference grid points in the transformed radial domain. |
+| `L` | Outer-domain mapping parameter used by the radial coordinate transform. |
+| `N` | Spherical-harmonic mode number or row vector of mode numbers. |
+| `ep0` | Initial perturbation amplitude, one value per mode in `N`. |
+| `epd0` | Initial nondimensional time derivative of `ep`, one value per mode. |
+| `T0` | Initial rotational field, size `numel(N)`-by-`xN`. |
+| `Td0` | Initial time derivative of `T0`, size `numel(N)`-by-`xN`. |
+| `Req` | Equilibrium radius in the solver scaling; usually `1` after nondimensionalizing by `Req`. |
+| `R` | Required nondimensional radial history on the time grid `t`. |
+| `Rd` | Required nondimensional radial velocity history on the time grid `t`. |
+| `Rdd` | Required nondimensional radial acceleration history on the time grid `t`. |
+| `Ca` | Cauchy number using the perturbation solver scaling. |
+| `alph` | Material model parameter used in the elastic stress terms. |
+| `Re` | Reynolds number using the perturbation solver scaling. |
+| `We` | Weber number using the perturbation solver scaling. |
+| `t` | Nondimensional time vector. `R`, `Rd`, and `Rdd` must have the same length. |
+| `TSM` | Time-stepping method: `1` for backward Euler, `2` for BDF2 after the first step. |
+| `forcedep` | `'F'` solves the perturbation amplitude; `'T'` prescribes `ep` and `epd`. |
+| `mod` | Rotational model string, currently `"me"` or `"Pros"`. |
+| `rot` | Perturbation model string: `"rot"` for rotational or `"irr"` for irrotational. |
+
+Optional name-value inputs:
+
+| Name | Meaning |
+| --- | --- |
+| `'Verbose'` | Logical flag for per-percent condition-number diagnostics. Default is `false`. |
+| `'ForcedEp'` | Required when `forcedep == 'T'`. Prescribed `ep` history, size `numel(N)`-by-`numel(t)`. A vector is accepted for a single mode. |
+| `'ForcedEpd'` | Required when `forcedep == 'T'`. Prescribed nondimensional `ep` time derivative with the same size as `'ForcedEp'`. |
+| `'ForcedEpPeriod'` | Optional positive scalar period, in nondimensional time, used for quasi-equilibrium early stopping during forced-`ep` rotational runs. If omitted, the solver runs to the end of `t`. |
+
+The solver no longer manufactures a fallback radial history. For a free
+constant-radius run, pass explicit histories:
+
+```matlab
+t = linspace(0, tf_nd, tsteps);
+R = ones(size(t));
+Rd = zeros(size(t));
+Rdd = zeros(size(t));
+```
+
+To prescribe the perturbation amplitude, set `forcedep = 'T'` in
+`s_basic_simulation.m`, fill the `forcedEp` and `forcedEpd` arrays after the time
+vector has been nondimensionalized, and pass them through `solverOptions` as the
+driver does. The entries are indexed as `(mode, timeIndex)`, and `ForcedEpd`
+must be the derivative with respect to the same nondimensional time vector `t`
+used by the solver.
+
+## Example Permutations
+
+The `examples/` folder contains scripts for free, laser-induced cavitation
+(`lic`), and ultrasound-forced radial histories across viscous, elastic, and
+viscoelastic material presets. Each case is available as both a single-mode and
+multimode perturbation example.
+
+For example:
+
+```matlab
+setup_paths
+run('examples/run_lic_viscoelastic_single_mode.m')
+```
+
+The examples share `examples/run_nonspherical_example.m` and
+`examples/example_config.m`, so changes to the common workflow can be made in
+one place.
+
+## Rebuilding `mexhyp2f1`
+
+Only rebuild this if MATLAB cannot load the included MEX binary.
+
+```matlab
+cd common/make_hyp2f1
+make_hyp2f1
+copyfile(['mexhyp2f1.' mexext], '..')
+cd ../..
+```
+
+This requires a working MEX compiler configuration. In MATLAB, use `mex -setup`
+if no compiler has been configured.
+
+The `hyp2f1` MEX support in `common/` is from Siyi Deng's MATLAB Central File
+Exchange submission, "Gauss hypergeometric function." That package computes the
+real-valued Gauss hypergeometric function using SciPy/Cephes C-source routines
+and provides the `make_hyp2f1.m` build script used here. See
+[Citations](#citations) and `THIRD_PARTY_NOTICES.md`.
+
+## Main Files
+
+- `s_basic_simulation.m`: top-level example/driver.
+- `common/f_call_IMRv2.m`: wrapper around the external IMR radial solver.
+- `common/compute_rotational_perturbation_evolution.m`: main perturbation
+  evolution solver.
+- `common/f_*.m`: numerical stencils, transformed-domain mappings, matrix
+  assembly, source terms, and constitutive/model coefficients.
+- `common/make_axisym_displacement_movie_all_fields.m`: snapshot/movie
+  visualization for strain, strain rate, and stress fields.
+- `common/hyp2f1.m`: MATLAB wrapper for the compiled hypergeometric MEX routine.
+- `examples/`: simulation permutations built from the main driver workflow.
+
+## Citations
+
+GitHub should display citation metadata from `CITATION.cff`. For now, cite the
+nonspherical code using:
+
+```text
+IMR Nonspherical Dynamics. See:
+https://www.sciencedirect.com/science/article/pii/S2352431626000404
+```
+
+A project-specific nonspherical-code paper should replace or supplement this
+entry once it is available.
+
+The included `hyp2f1`/`mexhyp2f1` support is based on:
+
+```text
+Siyi Deng. Gauss hypergeometric function. MATLAB Central File Exchange,
+Version 1.0.0.0, published 11 Oct 2013.
+https://www.mathworks.com/matlabcentral/fileexchange/43865-gauss-hypergeometric-function
+```
+
+The MATLAB Central page notes that the package computes real-valued
+`2F1(a,b;c;z)` using SciPy C-source files and provides `make_hyp2f1.m` to
+compile the MEX files.
+
+Additional third-party source notes are listed in `THIRD_PARTY_NOTICES.md`.
+
+## Notes
+
+- Run `setup_paths` from the repository root before using the examples or driver
+  scripts.
+- Generated figures, PDFs, movies, and large `.mat` datasets should usually stay
+  out of version control.
+- `LICENSE` currently specifies the GNU General Public License v3.0.

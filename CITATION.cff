@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "IMR Nonspherical Dynamics"
+type: software
+authors:
+  - name: "Inertial Microcavitation Rheometry"
+abstract: "MATLAB code for simulating small-amplitude nonspherical perturbations of an inertial microcavitation bubble in a soft material."
+license: GPL-3.0-only
+repository-code: "https://github.com/InertialMicrocavitationRheometry/IMR_nonspherical_dynamics"
+url: "https://github.com/InertialMicrocavitationRheometry/IMR_nonspherical_dynamics"
+keywords:
+  - MATLAB
+  - inertial microcavitation rheometry
+  - bubble dynamics
+  - nonspherical perturbations
+  - viscoelasticity
