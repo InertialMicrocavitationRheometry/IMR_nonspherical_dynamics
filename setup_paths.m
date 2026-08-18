@@ -1,7 +1,7 @@
 function paths = setup_paths(varargin)
 %SETUP_PATHS Add repository folders, and optionally IMRv2, to the MATLAB path.
 %
-%   setup_paths adds common/ and examples/ from this repository.
+%   setup_paths adds common/, cmap/, and examples/ from this repository.
 %
 %   setup_paths('IMRv2Path', pathToForwardSolver) also adds an explicit IMRv2
 %   forward-solver folder containing f_imr_fd.m.
@@ -16,9 +16,11 @@ parse(parser, varargin{:});
 
 repoRoot = fileparts(mfilename('fullpath'));
 commonDir = fullfile(repoRoot, 'common');
+cmapDir = fullfile(repoRoot, 'cmap');
 examplesDir = fullfile(repoRoot, 'examples');
 
 addpath(commonDir);
+addpath(cmapDir);
 addpath(examplesDir);
 
 imrv2Dir = resolve_imrv2_path(repoRoot, parser.Results.IMRv2Path);
@@ -29,6 +31,7 @@ end
 paths = struct();
 paths.repoRoot = repoRoot;
 paths.commonDir = commonDir;
+paths.cmapDir = cmapDir;
 paths.examplesDir = examplesDir;
 paths.imrv2ForwardSolverDir = char(imrv2Dir);
 paths.hasIMRv2 = exist('f_imr_fd', 'file') == 2;
@@ -36,6 +39,7 @@ paths.hasIMRv2 = exist('f_imr_fd', 'file') == 2;
 if nargout == 0
     fprintf('Added repository paths:\n');
     fprintf('  %s\n', commonDir);
+    fprintf('  %s\n', cmapDir);
     fprintf('  %s\n', examplesDir);
     if paths.hasIMRv2
         fprintf('IMRv2 radial solver available: %s\n', which('f_imr_fd'));

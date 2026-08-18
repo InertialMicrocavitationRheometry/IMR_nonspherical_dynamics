@@ -73,9 +73,10 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
 % The raw/legacy below-mean-wall field evaluation can be requested with:
 %   'WallFieldEvaluationMode','perturbed_wall','MaskBelowMeanWall',false
 
-% The optional grid drawn by this function is an Eulerian/current polar grid
-% by default. It is a visual reference grid only; it is not used to compute
-% the strain colour field.
+% The optional material/eulerian grids are wall-to-domain remeshes of the
+% pushed-forward total solution. They are visual overlays only and are not
+% used to compute the strain colour field. Use GridType='pushed_forward_raw'
+% to display literal material trajectories without radial remeshing.
 
     p = inputParser;
     % Exact name matching is required so short physical names such as 'G'
@@ -85,7 +86,7 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
     % Base geometry and output options.
     p.addParameter('Rref', []);
     p.addParameter('R0', []);
-    p.addParameter('Req', []);
+    p.addParameter('Req', []);              % legacy dimensional scale; solver coordinates use Req=1
     p.addParameter('EqFrameIdx', []);
     p.addParameter('RLimEq', []);
     p.addParameter('OutputMode', 'auto');      % 'auto','snapshot_pdf','movie'
@@ -122,6 +123,7 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
     p.addParameter('MP4Profile', 'MPEG-4');
     p.addParameter('MP4Quality', 95);
     p.addParameter('WriteMovie', true);
+    p.addParameter('ShowMovieColorbar', true);
     p.addParameter('Verbose', true);
 
     % Plot appearance.
@@ -207,16 +209,23 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
 
     % Optional grid overlay. This is not used for the colour computation.
     p.addParameter('FEM_grid', false);
-    p.addParameter('GridType', 'material');       % 'material' = pushed-forward deformation grid; 'eulerian' = reference overlay
+    p.addParameter('GridType', 'material');       % 'material'/'eulerian' = remeshed total-solution grid; 'pushed_forward_raw' = literal material map
     p.addParameter('GridCircles', 12);
     p.addParameter('GridRays', 48);
     p.addParameter('LineWidth', 0.65);
     p.addParameter('GridColor', [0.24 0.28 0.31]);
+    p.addParameter('GridCircleSpacing', 'current'); % radial levels for GridType='material': 'current' or 'material'
     p.addParameter('HideWallCircle', false);
     p.addParameter('WallCircleOffsetFrac', 0.012);
     p.addParameter('PtsPerCircle', 500);
     p.addParameter('PtsPerRay', 500);
     p.addParameter('RoGridVals', []);
+    % Preserve closed rings when the first-order map places a near-wall
+    % sample inside the finite-amplitude level-set surface by O(ep^2).
+    p.addParameter('KeepGridCirclesOutsideBubble', true);
+    p.addParameter('KeepGridRaysOutsideBubble', true);
+    p.addParameter('GridCircleWallClearanceFrac', 5e-4);
+    p.addParameter('GridPathSamples', []);        % sample count used to remesh total-solution grid paths
     p.addParameter('ThetaGridEq', []);
     p.addParameter('AngleChoice', 'reference');
     p.addParameter('AngleIterations', 2);
@@ -279,7 +288,14 @@ function make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile
         if ~isempty(opt.R0)
             Rref = opt.R0;
         elseif ~isempty(opt.Req)
-            Rref = opt.Req;
+            % Repository workflows nondimensionalize R, ep, and T by Req
+            % before calling this renderer (the perturbation solver is also
+            % called with Req=1). Retain the historical 'Req' argument as a
+            % compatibility signal without mixing its dimensional value into
+            % the order-one material coordinate map. Same-unit callers can
+            % set an explicit 'Rref' instead.
+            validateattributes(opt.Req, {'numeric'}, {'scalar','real','positive','finite'});
+            Rref = 1;
         else
             Rref = R(itEq);
         end
@@ -648,21 +664,26 @@ function render_movie(outputFile, frameIdx, frameData, ep, R, N, t, Rref, rOuter
         'Position', opt.MovieFigurePosition);
     ax = axes('Parent', fig);
 
-    % Leave room for the movie colorbar.
     if opt.ColorMaterialByStrain
-        ax.Position = [0.08 0.08 0.74 0.84];
+        if opt.ShowMovieColorbar
+            ax.Position = [0.08 0.08 0.74 0.84];
+        else
+            ax.Position = [0.08 0.08 0.84 0.84];
+        end
 
         colormap(ax, cMap);
         caxis(ax, cLim);
         apply_color_axis_scale(ax, opt);
 
-        cb = colorbar(ax, opt.ColorbarLocation);
-        cb.TickLabelInterpreter = 'latex';
-        cb.Label.Interpreter = 'latex';
-        cb.Label.String = sanitize_latex_label(opt.ColorbarLabel);
-        cb.Label.Rotation = 270;
-        cb.FontSize = opt.ColorbarFontSize;
-        cb.Label.FontSize = opt.ColorbarLabelFontSize;
+        if opt.ShowMovieColorbar
+            cb = colorbar(ax, opt.ColorbarLocation);
+            cb.TickLabelInterpreter = 'latex';
+            cb.Label.Interpreter = 'latex';
+            cb.Label.String = sanitize_latex_label(opt.ColorbarLabel);
+            cb.Label.Rotation = 270;
+            cb.FontSize = opt.ColorbarFontSize;
+            cb.Label.FontSize = opt.ColorbarLabelFontSize;
+        end
     end
 
     if isempty(opt.DelayTime)
@@ -683,6 +704,7 @@ function render_movie(outputFile, frameIdx, frameData, ep, R, N, t, Rref, rOuter
         wroteGif = false;
     end
 
+    movieFrameSize = [];
     for kk = 1:numel(frameIdx)
         it = frameIdx(kk);
 
@@ -701,6 +723,7 @@ function render_movie(outputFile, frameIdx, frameData, ep, R, N, t, Rref, rOuter
         drawnow;
 
         fr = getframe(fig);
+        [fr, movieFrameSize] = normalize_movie_frame_size(fr, movieFrameSize);
 
         if strcmp(movieType, 'mp4')
             writeVideo(vw, fr);
@@ -737,8 +760,33 @@ function render_movie(outputFile, frameIdx, frameData, ep, R, N, t, Rref, rOuter
     end
 end
 
+function [fr, targetSize] = normalize_movie_frame_size(fr, targetSize)
+    frameSize = size(fr.cdata);
+    frameSize = frameSize(1:2);
+
+    if isempty(targetSize)
+        targetSize = frameSize;
+        return;
+    end
+
+    if ~isequal(frameSize, targetSize)
+        fr.cdata = resize_frame_nearest(fr.cdata, targetSize);
+    end
+end
+
+function imgOut = resize_frame_nearest(imgIn, targetSize)
+    srcH = size(imgIn, 1);
+    srcW = size(imgIn, 2);
+    rowIdx = round(linspace(1, srcH, targetSize(1)));
+    colIdx = round(linspace(1, srcW, targetSize(2)));
+    imgOut = imgIn(rowIdx, colIdx, :);
+end
+
 function render_one_tile(ax, fd, epNow, Rcur, N, tNow, Rref, rOuterDisplay, cLim, cMap, opt)
     hold(ax, 'on');
+    if isprop(ax, 'Toolbar') && ~isempty(ax.Toolbar)
+        ax.Toolbar.Visible = 'off';
+    end
     if strcmpi(char(opt.AxesAspect), 'fill')
         axis(ax, 'normal');
     else
@@ -798,12 +846,16 @@ function render_one_tile(ax, fd, epNow, Rcur, N, tNow, Rref, rOuterDisplay, cLim
 
     if opt.FEM_grid
         switch lower(char(opt.GridType))
-            case {'material','deformed','pushed','pushed_forward'}
-                draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt);
-            case {'eulerian','reference','current'}
+            case {'material','deformed','lagrangian'}
+                draw_remeshed_total_solution_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt, opt.GridCircleSpacing);
+            case {'eulerian','current','deformed_current','current_deformed'}
+                draw_remeshed_total_solution_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt, 'current');
+            case {'pushed','pushed_forward','pushed_forward_raw','raw_material'}
+                draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt, opt.GridCircleSpacing);
+            case {'reference','polar','undeformed','overlay'}
                 draw_eulerian_reference_grid(ax, epNow, Rcur, N, rOuterDisplay, opt);
             otherwise
-                error('Unknown GridType. Use ''material'' or ''eulerian''.');
+                error('Unknown GridType. Use ''material'', ''eulerian'', ''pushed_forward_raw'', or ''reference''.');
         end
     end
 
@@ -1288,11 +1340,6 @@ function fd = build_frame_modal_data_current(it, T, ep, R, t, N, L, xg, W, w, On
     rEval = real(f_r(xg, R(it), L));
     drdx  = real(f_ds(xg, R(it), L));
 
-    urrot_coeff = zeros(nModes, xN);
-    phi_coeff   = zeros(nModes, xN);
-    durrot_coeff = zeros(nModes, xN);
-    dphi_coeff = zeros(nModes, xN);
-
     A_coeff = zeros(nModes, xN);
     B_coeff = zeros(nModes, xN);
     Ar_coeff = zeros(nModes, xN);
@@ -1321,19 +1368,11 @@ function fd = build_frame_modal_data_current(it, T, ep, R, t, N, L, xg, W, w, On
         A = Pn .* rEval.^(-(n+2)) + ur_rot;
         B = -( Pn ./ ((n+1) .* rEval.^(n+2)) + Phi ./ rEval );
 
-        urVec = real(ur_rot(:)).';
-        phiVec = real(Phi(:)).';
-
-        urrot_coeff(j,:) = urVec;
-        phi_coeff(j,:) = phiVec;
-
         Arow = real(A(:)).';
         Brow = real(B(:)).';
         A_coeff(j,:) = Arow;
         B_coeff(j,:) = Brow;
 
-        durrot_coeff(j,:) = safe_gradient_1d(urVec, rEval(:).');
-        dphi_coeff(j,:)   = safe_gradient_1d(phiVec, rEval(:).');
         Ar_coeff(j,:) = safe_gradient_1d(Arow, rEval(:).');
         Br_coeff(j,:) = safe_gradient_1d(Brow, rEval(:).');
     end
@@ -1346,10 +1385,6 @@ function fd = build_frame_modal_data_current(it, T, ep, R, t, N, L, xg, W, w, On
         it, rEval, drdx, T, ep, R, t, N, L, xg, W, w, One_wT, opt);
 
     fd.rEval = real(rEval(:).');
-    fd.urrot = urrot_coeff;
-    fd.phi = phi_coeff;
-    fd.durrot = durrot_coeff;
-    fd.dphi = dphi_coeff;
     fd.A = A_coeff;
     fd.B = B_coeff;
     fd.Ar = Ar_coeff;
@@ -1597,10 +1632,221 @@ function g = safe_gradient_1d(y, x)
 end
 
 
-function draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt)
+function draw_remeshed_total_solution_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt, radialSpacingMode)
+    % First evaluate the complete potential-plus-rotational displacement map.
+    % Reparameterizing its radial paths prevents a finite displacement from
+    % evacuating every grid level next to the displayed bubble boundary.
+    radialSpacingMode = normalize_grid_radial_spacing(radialSpacingMode);
+    roWall = Rref;
+    roOuter = nthroot(max(rOuterDisplay.^3 - Rcur.^3 + Rref.^3, Rref.^3), 3);
+
+    if isempty(opt.RoGridVals)
+        nCircles = max(round(opt.GridCircles), 1);
+        if opt.HideWallCircle
+            s0 = opt.WallCircleOffsetFrac;
+        else
+            s0 = 0;
+        end
+        sRequested = linspace(s0, 1, nCircles) .^ opt.RadialSpacingPower;
+        roCircles = material_radii_for_grid_spacing(sRequested, radialSpacingMode, ...
+            Rcur, Rref, rOuterDisplay, roWall, roOuter);
+    else
+        roCircles = real(opt.RoGridVals(:).');
+        roCircles = roCircles(isfinite(roCircles) & roCircles >= roWall & roCircles <= roOuter);
+        roCircles = unique(roCircles, 'stable');
+        if ~opt.HideWallCircle && (isempty(roCircles) || abs(roCircles(1)-roWall) > 1e-12)
+            roCircles = [roWall roCircles];
+        end
+    end
+
+    rCircleBase = nthroot(max(roCircles.^3 + Rcur.^3 - Rref.^3, Rcur.^3), 3);
+    sCircles = (rCircleBase - Rcur) ./ max(rOuterDisplay - Rcur, eps);
+    sCircles = min(max(real(sCircles), 0), 1);
+    if ~opt.HideWallCircle && ~isempty(sCircles)
+        sCircles(1) = 0;
+    end
+
+    if isempty(opt.ThetaGridEq)
+        phiRays = linspace(0, 2*pi, max(round(opt.GridRays), 1)+1);
+        phiRays(end) = [];
+    else
+        phiRays = mod(real(opt.ThetaGridEq(:).'), 2*pi);
+        phiRays = unique(phiRays(isfinite(phiRays)), 'stable');
+    end
+
+    phiCirc = linspace(0, 2*pi, max(round(opt.PtsPerCircle), 3));
+    phiAll = [phiCirc phiRays];
+    circleCols = 1:numel(phiCirc);
+    rayCols = numel(phiCirc) + (1:numel(phiRays));
+
+    if isempty(opt.GridPathSamples)
+        nPath = max([128, 4*max(numel(sCircles), 1), ceil(opt.PtsPerRay/2)]);
+    else
+        validateattributes(opt.GridPathSamples, {'numeric'}, {'scalar','real','finite','positive'});
+        nPath = max(round(opt.GridPathSamples), 32);
+    end
+    sPath = unique([linspace(0, 1, nPath), sCircles]);
+    rBase = Rcur + (rOuterDisplay - Rcur) .* sPath;
+    roPath = nthroot(max(rBase.^3 - Rcur.^3 + Rref.^3, Rref.^3), 3);
+
+    if strcmpi(char(opt.AngleChoice), 'reference')
+        [Xraw, Zraw] = forward_material_mesh_separable(roPath, phiAll, ...
+            fd, Rcur, Rref, N, opt);
+    else
+        [roMesh, phiMesh] = ndgrid(roPath, phiAll);
+        thetaMesh = meridional_theta_from_plot_angle(phiMesh, opt.ThetaPoleEps);
+        sxMesh = sign_nonzero(cos(phiMesh));
+        rawOpt = opt;
+        rawOpt.ClipInsideBubble = false;
+        [Xraw, Zraw] = forward_material_line(roMesh, thetaMesh, sxMesh, true(size(roMesh)), ...
+            fd, epNow, Rcur, Rref, N, rawOpt, 'mesh', false);
+    end
+    [Xgrid, Zgrid] = remesh_total_solution_paths(Xraw, Zraw, sPath, phiAll, ...
+        epNow, Rcur, N, rOuterDisplay, opt);
+
+    circleX = nan(numel(sCircles), numel(phiCirc)+1);
+    circleZ = nan(numel(sCircles), numel(phiCirc)+1);
+    for k = 1:numel(sCircles)
+        [~, row] = min(abs(sPath - sCircles(k)));
+        if sCircles(k) <= 10*eps
+            thCirc = meridional_theta_from_plot_angle(phiCirc, opt.ThetaPoleEps);
+            sxCirc = sign_nonzero(cos(phiCirc));
+            [Xline, Zline] = bubble_curve_level_set(thCirc, sxCirc, epNow, Rcur, N, opt);
+        else
+            Xline = Xgrid(row, circleCols);
+            Zline = Zgrid(row, circleCols);
+        end
+        circleX(k,1:end-1) = Xline;
+        circleZ(k,1:end-1) = Zline;
+    end
+    if ~isempty(sCircles)
+        plot(ax, reshape(circleX.', [], 1), reshape(circleZ.', [], 1), '-', ...
+            'Color', opt.GridColor, 'LineWidth', opt.LineWidth);
+    end
+    if ~isempty(rayCols)
+        rayX = [Xgrid(:,rayCols); nan(1,numel(rayCols))];
+        rayZ = [Zgrid(:,rayCols); nan(1,numel(rayCols))];
+        plot(ax, rayX(:), rayZ(:), '-', 'Color', opt.GridColor, 'LineWidth', opt.LineWidth);
+    end
+end
+
+function [Xraw, Zraw] = forward_material_mesh_separable(roPath, phiAll, fd, Rcur, Rref, N, opt)
+    % The reference-angle map separates exactly into radial coefficients and
+    % angular harmonics. Evaluate each unique coordinate once, then assemble
+    % the same total first-order displacement with implicit outer products.
+    ro = real(roPath(:));
+    radicand = ro.^3 + Rcur.^3 - Rref.^3;
+    rs = nthroot(max(radicand, 0), 3);
+    wallTol = max(1e-9, 1e-7*Rref);
+    rs(abs(ro-Rref) <= wallTol) = Rcur;
+    rq = min(max(rs, fd.rEval(1)), fd.rEval(end));
+
+    phi = real(phiAll(:).');
+    theta = meridional_theta_from_plot_angle(phi, opt.ThetaPoleEps);
+    sx = sign_nonzero(cos(phi));
+    az = slice_azimuth_from_side(sx, opt);
+
+    urSum = zeros(numel(rs), numel(phi));
+    dthSum = zeros(numel(rs), numel(phi));
+    for j = 1:numel(N)
+        [Y, dY, ~, ~, ~, ~] = harmonic_values_for_plot(N(j), theta, az, opt);
+        urCoeff = interp_radial_current(fd.rEval, fd.A(j,:), rq, 'linear', opt);
+        uthCoeff = interp_radial_current(fd.rEval, fd.B(j,:), rq, 'linear', opt);
+        dthCoeff = uthCoeff(:) ./ max(abs(rs), eps);
+        urSum = urSum + urCoeff(:) .* reshape(Y, 1, []);
+        dthSum = dthSum + dthCoeff .* reshape(dY, 1, []);
+    end
+
+    sinTh = sin(theta);
+    cosTh = cos(theta);
+    Xraw = sx .* ((rs + urSum) .* sinTh + rs .* dthSum .* cosTh);
+    Zraw =       (rs + urSum) .* cosTh - rs .* dthSum .* sinTh;
+    Xraw(:,abs(sinTh) < 1e-12) = 0;
+end
+
+function [Xgrid, Zgrid] = remesh_total_solution_paths(Xraw, Zraw, sPath, phiAll, epNow, Rcur, N, rOuterDisplay, opt)
+    Xraw = real(Xraw);
+    Zraw = real(Zraw);
+    wallClearance = max(0, opt.GridCircleWallClearanceFrac) * max(abs(Rcur), eps);
+
+    invalidCols = find(~all(isfinite(Xraw) & isfinite(Zraw), 1));
+    for j = invalidCols
+        finite = isfinite(Xraw(:,j)) & isfinite(Zraw(:,j));
+        if nnz(finite) >= 2
+            first = find(finite, 1, 'first');
+            last = find(finite, 1, 'last');
+            validRows = find(finite(first:last)) + first - 1;
+            source = linspace(0, 1, numel(validRows));
+            Xraw(:,j) = interp1(source, Xraw(validRows,j), sPath(:), 'linear', 'extrap');
+            Zraw(:,j) = interp1(source, Zraw(validRows,j), sPath(:), 'linear', 'extrap');
+        else
+            phi0 = phiAll(j);
+            th0 = meridional_theta_from_plot_angle(phi0, opt.ThetaPoleEps);
+            sx0 = sign_nonzero(cos(phi0));
+            rb0 = bubble_radius_general(th0, sx0, epNow, Rcur, N, opt);
+            rr = rb0 + (rOuterDisplay-rb0) .* sPath(:);
+            Xraw(:,j) = sx0 .* rr .* sin(th0);
+            Zraw(:,j) = rr .* cos(th0);
+        end
+    end
+
+    thRaw = atan2(abs(Xraw), Zraw);
+    sxRaw = sign_nonzero(Xraw);
+    rbRaw = bubble_radius_general(thRaw, sxRaw, epNow, Rcur, N, opt);
+    rrRaw = hypot(Xraw, Zraw);
+    minRawRadius = rbRaw + wallClearance;
+    inside = rrRaw < minRawRadius;
+    Xraw(inside) = sxRaw(inside) .* minRawRadius(inside) .* sin(thRaw(inside));
+    Zraw(inside) = minRawRadius(inside) .* cos(thRaw(inside));
+
+    thFirst = atan2(abs(Xraw(1,:)), Zraw(1,:));
+    sxFirst = sign_nonzero(Xraw(1,:));
+    rbFirst = bubble_radius_general(thFirst, sxFirst, epNow, Rcur, N, opt);
+    Xraw(1,:) = sxFirst .* rbFirst .* sin(thFirst);
+    Zraw(1,:) = rbFirst .* cos(thFirst);
+
+    thLast = atan2(abs(Xraw(end,:)), Zraw(end,:));
+    sxLast = sign_nonzero(Xraw(end,:));
+    Xraw(end,:) = sxLast .* rOuterDisplay .* sin(thLast);
+    Zraw(end,:) = rOuterDisplay .* cos(thLast);
+
+    arc = [zeros(1, size(Xraw,2)); cumsum(hypot(diff(Xraw,1,1), diff(Zraw,1,1)), 1)];
+    Xgrid = nan(size(Xraw));
+    Zgrid = nan(size(Zraw));
+    for j = 1:size(Xraw,2)
+        [arcCol, ia] = unique(arc(:,j), 'stable');
+        x = Xraw(ia,j);
+        z = Zraw(ia,j);
+        if numel(arcCol) < 2 || arcCol(end) <= eps(max(abs([x; z])))
+            Xgrid(:,j) = x(1) + (x(end)-x(1)) .* sPath(:);
+            Zgrid(:,j) = z(1) + (z(end)-z(1)) .* sPath(:);
+        else
+            arcCol = arcCol ./ arcCol(end);
+            Xgrid(:,j) = interp1(arcCol, x, sPath(:), 'linear');
+            Zgrid(:,j) = interp1(arcCol, z, sPath(:), 'linear');
+        end
+    end
+
+    thGrid = atan2(abs(Xgrid), Zgrid);
+    sxGrid = sign_nonzero(Xgrid);
+    rbGrid = bubble_radius_general(thGrid, sxGrid, epNow, Rcur, N, opt);
+    rrGrid = hypot(Xgrid, Zgrid);
+    clearance = wallClearance .* (sPath(:) > 0);
+    minGridRadius = rbGrid + clearance;
+    tooClose = rrGrid < minGridRadius;
+    Xgrid(tooClose) = sxGrid(tooClose) .* minGridRadius(tooClose) .* sin(thGrid(tooClose));
+    Zgrid(tooClose) = minGridRadius(tooClose) .* cos(thGrid(tooClose));
+end
+
+
+function draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterDisplay, opt, radialSpacingMode)
     % Draw material-labelled circles/rays pushed forward by the same first-order
     % displacement map used in the theory. This is a deformation-grid overlay only;
     % the strain colour field is computed separately on the Eulerian grid.
+    if nargin < 9 || isempty(radialSpacingMode)
+        radialSpacingMode = opt.GridCircleSpacing;
+    end
+    radialSpacingMode = normalize_grid_radial_spacing(radialSpacingMode);
 
     roOuter = nthroot(max(rOuterDisplay.^3 - Rcur.^3 + Rref.^3, Rref.^3), 3);
     roWall = Rref;
@@ -1614,7 +1860,7 @@ function draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterD
         end
         sC = linspace(s0, 1, nCircles);
         sC = sC .^ opt.RadialSpacingPower;
-        roVals = roWall + (roOuter - roWall) .* sC;
+        roVals = material_radii_for_grid_spacing(sC, radialSpacingMode, Rcur, Rref, rOuterDisplay, roWall, roOuter);
         if ~opt.HideWallCircle
             roVals(1) = roWall;
         end
@@ -1651,7 +1897,7 @@ function draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterD
     end
 
     sRay = linspace(0, 1, opt.PtsPerRay) .^ opt.RadialSpacingPower;
-    roRayBase = roWall + (roOuter - roWall) .* sRay;
+    roRayBase = material_radii_for_grid_spacing(sRay, radialSpacingMode, Rcur, Rref, rOuterDisplay, roWall, roOuter);
     for k = 1:numel(phiRays)
         phi0 = phiRays(k);
         thLine = meridional_theta_from_plot_angle(phi0, opt.ThetaPoleEps) * ones(size(roRayBase));
@@ -1659,6 +1905,30 @@ function draw_pushed_forward_material_grid(ax, fd, epNow, Rcur, Rref, N, rOuterD
         [Xdef, Zdef] = forward_material_line(roRayBase, thLine, sxLine, true(size(roRayBase)), ...
             fd, epNow, Rcur, Rref, N, opt, 'ray', opt.AnchorRaysToBubble);
         plot(ax, Xdef, Zdef, '-', 'Color', opt.GridColor, 'LineWidth', opt.LineWidth);
+    end
+end
+
+function mode = normalize_grid_radial_spacing(modeIn)
+    mode = lower(char(modeIn));
+    switch mode
+        case {'current','display','eulerian'}
+            mode = 'current';
+        case {'material','reference','lagrangian'}
+            mode = 'material';
+        otherwise
+            error('GridCircleSpacing must be ''current'' or ''material''.');
+    end
+end
+
+function roVals = material_radii_for_grid_spacing(sVals, mode, Rcur, Rref, rOuterDisplay, roWall, roOuter)
+    switch mode
+        case 'current'
+            rVals = Rcur + (rOuterDisplay - Rcur) .* sVals;
+            roVals = nthroot(max(rVals.^3 - Rcur.^3 + Rref.^3, Rref.^3), 3);
+        case 'material'
+            roVals = roWall + (roOuter - roWall) .* sVals;
+        otherwise
+            error('Internal error: unknown grid radial spacing mode.');
     end
 end
 
@@ -1697,22 +1967,27 @@ function [Xdef, Zdef] = forward_material_line(ro, thetao, sx, keep, fd, epNow, R
     theta_use = th_o;
     if strcmp(angleChoice, 'current')
         for iter = 1:max(1, round(opt.AngleIterations))
-            [~, dth_tmp] = modal_sums_material(theta_use, sx_o, rs, rq, onWall, fd, epNow, Rcur, N, opt);
+            [~, dth_tmp] = modal_sums_material(theta_use, sx_o, rs, rq, fd, N, opt);
             theta_use = th_o + dth_tmp;
             theta_use = max(opt.ThetaPoleEps, min(pi-opt.ThetaPoleEps, real(theta_use)));
         end
     end
 
     if strcmp(angleChoice, 'reference')
-        [ur_sum, dth_sum] = modal_sums_material(th_o, sx_o, rs, rq, onWall, fd, epNow, Rcur, N, opt);
+        [ur_sum, dth_sum] = modal_sums_material(th_o, sx_o, rs, rq, fd, N, opt);
     else
-        [ur_sum, dth_sum] = modal_sums_material(theta_use, sx_o, rs, rq, onWall, fd, epNow, Rcur, N, opt);
+        [ur_sum, dth_sum] = modal_sums_material(theta_use, sx_o, rs, rq, fd, N, opt);
     end
 
-    Xtmp = sx_o .* ( rs_plot .* sin(th_o) + ur_sum .* sin(th_o) + rs_plot .* dth_sum .* cos(th_o) );
-    Ztmp =          rs_plot .* cos(th_o) + ur_sum .* cos(th_o) - rs_plot .* dth_sum .* sin(th_o);
+    % Appendix A gives a first-order coordinate map. Expand the current
+    % Cartesian position to the same order so that products such as
+    % ur*dtheta and dtheta^2 are not introduced by the renderer.
+    sinTh = sin(th_o);
+    cosTh = cos(th_o);
+    Xtmp = sx_o .* ((rs_plot + ur_sum) .* sinTh + rs_plot .* dth_sum .* cosTh);
+    Ztmp =          (rs_plot + ur_sum) .* cosTh - rs_plot .* dth_sum .* sinTh;
 
-    pole = abs(sin(th_o)) < 1e-12;
+    pole = abs(sinTh) < 1e-12;
     Xtmp(pole) = 0;
 
     if opt.ClipInsideBubble
@@ -1720,15 +1995,30 @@ function [Xdef, Zdef] = forward_material_line(ro, thetao, sx, keep, fd, epNow, R
         thtmp = atan2(abs(Xtmp), Ztmp);
         sxTmp = sign_nonzero(Xtmp);
         rb = bubble_radius_general(thtmp, sxTmp, epNow, Rcur, N, opt);
-        inside = rtmp < rb - max(1e-10, 1e-8*max(Rcur,1));
-        Xtmp(inside) = NaN;
-        Ztmp(inside) = NaN;
+        keepOutside = (strcmp(lineKind, 'circle') && opt.KeepGridCirclesOutsideBubble) || ...
+                      (strcmp(lineKind, 'ray') && opt.KeepGridRaysOutsideBubble);
+        if keepOutside
+            wallClearance = max(0, opt.GridCircleWallClearanceFrac) * max(abs(Rcur), eps);
+            lineOffset = max(rs_plot - Rcur, wallClearance);
+            minLineRadius = rb + lineOffset;
+            tooClose = rtmp < minLineRadius;
+            Xtmp(tooClose) = sxTmp(tooClose) .* minLineRadius(tooClose) .* sin(thtmp(tooClose));
+            Ztmp(tooClose) = minLineRadius(tooClose) .* cos(thtmp(tooClose));
+        else
+            inside = rtmp < rb - max(1e-10, 1e-8*max(Rcur,1));
+            Xtmp(inside) = NaN;
+            Ztmp(inside) = NaN;
+        end
     end
 
     if anchorRay && strcmp(lineKind, 'ray')
-        [xb, zb] = bubble_curve_level_set(th_o(1), sx_o(1), epNow, Rcur, N, opt);
         idx0 = find(isfinite(Xtmp) & isfinite(Ztmp), 1, 'first');
         if ~isempty(idx0)
+            thAnchor = atan2(abs(Xtmp(idx0)), Ztmp(idx0));
+            sxAnchor = sign_nonzero(Xtmp(idx0));
+            rbAnchor = bubble_radius_general(thAnchor, sxAnchor, epNow, Rcur, N, opt);
+            xb = sxAnchor .* rbAnchor .* sin(thAnchor);
+            zb =            rbAnchor .* cos(thAnchor);
             Xtmp(idx0) = xb;
             Ztmp(idx0) = zb;
         end
@@ -1740,7 +2030,7 @@ function [Xdef, Zdef] = forward_material_line(ro, thetao, sx, keep, fd, epNow, R
     Zdef(idx) = real(Ztmp);
 end
 
-function [ur_sum, dth_sum] = modal_sums_material(theta_eval, sx_eval, rs, rq, onWall, fd, epNow, Rcur, N, opt)
+function [ur_sum, dth_sum] = modal_sums_material(theta_eval, sx_eval, rs, rq, fd, N, opt)
     ur_sum = zeros(size(rs));
     dth_sum = zeros(size(rs));
     az = slice_azimuth_from_side(sx_eval, opt);
@@ -1748,14 +2038,15 @@ function [ur_sum, dth_sum] = modal_sums_material(theta_eval, sx_eval, rs, rq, on
     for j = 1:numel(N)
         n = N(j);
         [Y, dY, ~, ~, ~, ~] = harmonic_values_for_plot(n, theta_eval, az, opt);
+        Y = reshape(Y, size(theta_eval));
+        dY = reshape(dY, size(theta_eval));
 
-        urrot = interp_radial_current(fd.rEval, fd.urrot(j,:), rq, 'linear', opt);
-        Phi   = interp_radial_current(fd.rEval, fd.phi(j,:),   rq, 'linear', opt);
-        urrot(onWall) = 0;
-
-        Pn = epNow(j) * Rcur^(n+3);
-        ur_coeff = Pn .* rs.^(-(n+2)) + urrot;
-        dth_coeff = -( Pn ./ ((n+1).*rs.^(n+3)) + Phi ./ rs.^2 );
+        % Use the total displacement coefficients shared with the strain path.
+        ur_coeff = interp_radial_current(fd.rEval, fd.A(j,:), rq, 'linear', opt);
+        uth_coeff = interp_radial_current(fd.rEval, fd.B(j,:), rq, 'linear', opt);
+        ur_coeff = reshape(ur_coeff, size(rs));
+        uth_coeff = reshape(uth_coeff, size(rs));
+        dth_coeff = uth_coeff ./ max(abs(rs), eps);
 
         ur_sum  = ur_sum  + ur_coeff  .* Y;
         dth_sum = dth_sum + dth_coeff .* dY;
@@ -2036,7 +2327,7 @@ function rb = bubble_radius_eval(theta, az, epNow, Rcur, N, opt)
     rb = Rcur * ones(size(theta));
     for j = 1:numel(N)
         n = N(j);
-        [Y,~,~,~,~,~] = harmonic_values_for_plot(n, theta, az, opt);
+        Y = harmonic_value_for_plot(n, theta, az, opt);
         rb = rb + Rcur * epNow(j) * Y;
     end
     rb = real(rb);
@@ -2159,6 +2450,42 @@ function az = slice_azimuth_from_side(sx, opt)
     % Left half uses SlicePhi + pi.
     az = opt.SlicePhi * ones(size(sx));
     az(sx < 0) = opt.SlicePhi + pi;
+end
+
+function Y = harmonic_value_for_plot(n, theta, az, opt)
+    outputSize = size(theta);
+    thetaRow = theta(:).';
+    mode = lower(char(opt.AngularMode));
+    switch mode
+        case {'axisymmetric','axisym','m0','m_equals_0'}
+            Y = Ynm0(n, thetaRow);
+
+        case {'m_equals_n','m=n','sectoral','sectoral_mn'}
+            m = n;
+            x = cos(thetaRow);
+            Pn = legendre(n, x);
+            Pnm = squeeze(Pn(m+1,:));
+            if m == 0
+                normC = sqrt((2*n + 1)/(4*pi));
+            else
+                normC = sqrt(2) * sqrt((2*n + 1)/(4*pi) * ...
+                    exp(gammaln(n-m+1) - gammaln(n+m+1)));
+            end
+            azRow = az(:).';
+            switch lower(char(opt.RealHarmonicPart))
+                case {'cos','cosine'}
+                    trig = cos(m .* azRow);
+                case {'sin','sine'}
+                    trig = sin(m .* azRow);
+                otherwise
+                    error('RealHarmonicPart must be ''cos'' or ''sin''.');
+            end
+            Y = normC .* Pnm .* trig;
+
+        otherwise
+            error('Unknown AngularMode: %s. Use ''axisymmetric'' or ''m_equals_n''.', char(opt.AngularMode));
+    end
+    Y = reshape(Y, outputSize);
 end
 
 function [Y, Yt, Ytt, Yp, Ytp, Ypp] = harmonic_values_for_plot(n, theta, az, opt)

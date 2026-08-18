@@ -18,6 +18,8 @@ rotational perturbation models, and exports a strain-field snapshot PDF.
   radial domain.
 - Eulerian/current-domain visualization of strain, strain rate, and stress
   fields with `make_axisym_displacement_movie_all_fields`.
+- Custom visualization colormaps in `cmap/`, including
+  `brown_centered_diverging`, whose neutral midpoint is `#4E3629`.
 - Hypergeometric-function support through the included `mexhyp2f1` MEX binary
   and rebuild sources.
 
@@ -28,6 +30,7 @@ IMR_nonspherical_dynamics/
 |-- s_basic_simulation.m              Main runnable MATLAB driver
 |-- setup_paths.m                     Adds repository folders to the MATLAB path
 |-- examples/                         Ready-to-run parameter permutations
+|-- cmap/                             Custom colormap functions
 |-- common/                           Shared MATLAB functions and MEX support
 |   |-- compute_rotational_perturbation_evolution.m
 |   |-- f_*.m                         Numerical kernels and model terms
@@ -168,6 +171,34 @@ The script:
 
 The default driver uses mode `n = 8`, `xN = 256` radial grid points, and
 `tsteps = 5000`.
+
+### Custom colormap and white FEM grid
+
+`setup_paths` adds `cmap/` to the MATLAB path. Keep the same `StrainMeasure`
+and `StrainScalar` used by your simulation, then add the display options:
+
+```matlab
+make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile, ...
+    'StrainMeasure', 'almansi', ...   % keep your existing value
+    'StrainScalar', 'ert', ...        % keep your existing value
+    'StrainColormap', @brown_centered_diverging, ...
+    'StrainCLim', [-0.1 0.1], ...
+    'SymmetricCLim', true, ...
+    'FEM_grid', true, ...
+    'GridType', 'eulerian', ...
+    'GridCircleSpacing', 'current', ...
+    'KeepGridCirclesOutsideBubble', true, ...
+    'GridCircleWallClearanceFrac', 5e-4, ...
+    'GridColor', [1 1 1]);
+```
+
+`GridType='eulerian'` and `GridType='material'` both deform the visual grid with
+the complete potential-plus-rotational displacement solution. Their radial
+paths are remeshed continuously from the perturbed bubble wall to the displayed
+outer radius, so finite displacement cannot leave an empty near-wall annulus.
+`GridCircleSpacing='current'` uses uniform current-radius levels; use
+`GridCircleSpacing='material'` to retain material-radius level spacing. Literal
+unremeshed trajectories remain available with `GridType='pushed_forward_raw'`.
 
 ## Perturbation Solver Inputs
 

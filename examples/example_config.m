@@ -45,7 +45,10 @@ cfg.outputFile = "";
 cfg.snapshotLayout = [3 4];
 cfg.snapshotTimeRange = [];
 cfg.strainScalar = 'ert';
+cfg.strainColormap = 'brown_centered_diverging';
 cfg.strainCLim = [-0.1 0.1];
+cfg.gridColor = [0.24 0.28 0.31];
+cfg.colorbarLabel = 'Eulerian Almansi shear strain $e_{rt}$';
 
 % Default radial/acoustic settings. Drive-specific cases override these below.
 cfg.Rmax = 150e-6;
