@@ -155,9 +155,10 @@ IMRv2 is not required for:
 From the repository root in MATLAB:
 
 ```matlab
-setup_paths
 s_basic_simulation
 ```
+
+The script calls `setup_paths` before starting the simulation.
 
 The script:
 
@@ -166,16 +167,20 @@ The script:
 3. Calls `compute_rotational_perturbation_evolution` for irrotational and
    rotational perturbation evolution.
 4. Plots the radius and perturbation amplitude histories.
-5. Writes a snapshot PDF named `strain_test.pdf` in the current working
-   directory.
+5. Writes `strain_prelim.pdf` and `strain_movie.mp4` in the current working
+   directory. Skip the final two script sections to compute and plot the
+   histories without exporting strain fields.
 
-The default driver uses mode `n = 8`, `xN = 256` radial grid points, and
-`tsteps = 5000`.
+The default driver uses spherical-harmonic degree `N = 5`, `xN = 256`
+transformed radial grid points, and `tsteps = 1000` requested time samples.
 
 ### Custom colormap and white FEM grid
 
-`setup_paths` adds `cmap/` to the MATLAB path. Keep the same `StrainMeasure`
-and `StrainScalar` used by your simulation, then add the display options:
+`setup_paths` adds `cmap/` to the MATLAB path when the folder is present.
+The basic driver uses MATLAB's `parula` palette when the custom colormap is
+unavailable. To use the custom colormap in your own plot, keep the same
+`StrainMeasure` and `StrainScalar` used by your simulation and add the display
+options below.
 
 ```matlab
 make_axisym_displacement_movie_all_fields(T, ep, R, t, N, L, outputFile, ...
@@ -256,12 +261,11 @@ Rd = zeros(size(t));
 Rdd = zeros(size(t));
 ```
 
-To prescribe the perturbation amplitude, set `forcedep = 'T'` in
-`s_basic_simulation.m`, fill the `forcedEp` and `forcedEpd` arrays after the time
-vector has been nondimensionalized, and pass them through `solverOptions` as the
-driver does. The entries are indexed as `(mode, timeIndex)`, and `ForcedEpd`
-must be the derivative with respect to the same nondimensional time vector `t`
-used by the solver.
+To prescribe a sinusoidal perturbation amplitude, set `forcedep = 'T'` in
+`s_basic_simulation.m`. The driver builds `forcedEp` and `forcedEpd` after
+nondimensionalizing time and passes them through `solverOptions`. To supply
+your own history, keep the `(mode, timeIndex)` layout and differentiate with
+respect to the same nondimensional time vector `t` used by the solver.
 
 ## Example Permutations
 
